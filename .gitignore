@@ -1,0 +1,18 @@
+# Dependency folders
+node_modules/
+
+# Local configuration files
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Root level items to exclude from Git
+test_key.js
+package.json
+package-lock.json
+memory/
+README.md

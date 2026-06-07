@@ -52,12 +52,32 @@ export const RecordsPage = ({ token, records, onAddMedicine, onAddRecord, onDele
     setOcrLoading(true);
     setOcrPreview(typeof imageSource === "string" ? imageSource : URL.createObjectURL(imageSource));
     try {
-      const result = await Tesseract.recognize(imageSource, "eng");
-      const text = result.data.text.trim();
-      setRecordForm((current) => ({ ...current, prescription_image: typeof imageSource === "string" ? imageSource : "", prescription_text: text }));
-      await importText(text, source);
-    } catch {
-      toast.error("OCR could not read that image.");
+      const formData = new FormData();
+      if (typeof imageSource === "string") {
+        const response = await fetch(imageSource);
+        const blob = await response.blob();
+        formData.append("file", blob, "camera-capture.jpg");
+      } else {
+        formData.append("file", imageSource, imageSource.name || "upload.jpg");
+      }
+      formData.append("source", source);
+
+      const response = await apiRequest({
+        method: "post",
+        url: "/medicines/import-from-image",
+        token,
+        data: formData,
+      });
+
+      toast.success(`${response.items.length} medicine item(s) added`);
+      setRecordForm((current) => ({
+        ...current,
+        prescription_image: typeof imageSource === "string" ? imageSource : "",
+        prescription_text: response.transcription || "",
+      }));
+      await onAddMedicine(null, true);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Enter valid medicine details");
     } finally {
       setOcrLoading(false);
     }

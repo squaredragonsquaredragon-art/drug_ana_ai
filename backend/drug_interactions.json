@@ -1,50 +1,82 @@
 [
   {
+    "id": "rule-paracetamol-ibuprofen",
+    "medicines": ["paracetamol", "ibuprofen"],
+    "severity_level": "moderate",
+    "explanation": "Both paracetamol (acetaminophen) and ibuprofen are common pain relievers but work via different mechanisms. Taking them together in high doses or frequently can increase the risk of gastrointestinal side effects and mask each other's toxicity signals. Long-term combined use may stress the liver and kidneys.",
+    "safety_recommendation": "Can be alternated every 4–6 hours under medical guidance, but avoid taking both at the same time without a doctor's advice. Keep doses within recommended limits.",
+    "organ_effects": "Liver, kidneys, stomach lining"
+  },
+  {
     "id": "rule-warfarin-ibuprofen",
     "medicines": ["warfarin", "ibuprofen"],
     "severity_level": "severe",
-    "explanation": "This combination can significantly increase bleeding risk.",
-    "safety_recommendation": "Avoid combining unless specifically approved by a clinician. Watch for bruising, dark stools, or bleeding.",
-    "organ_effects": "Blood clotting"
+    "explanation": "Ibuprofen inhibits platelet aggregation and can irritate the GI tract, while warfarin is a blood thinner. This combination can significantly increase bleeding risk — both internally and at injury sites.",
+    "safety_recommendation": "Avoid combining unless specifically approved by a clinician. Watch for bruising, dark stools, or unusual bleeding and seek emergency care if these occur.",
+    "organ_effects": "Blood clotting, GI tract"
   },
   {
     "id": "rule-lisinopril-spironolactone",
     "medicines": ["lisinopril", "spironolactone"],
     "severity_level": "severe",
-    "explanation": "Combined use may raise potassium and affect kidney function.",
-    "safety_recommendation": "Use only with medical supervision and monitor potassium and kidney labs.",
+    "explanation": "Both are used for blood pressure and heart failure, but combined use can cause dangerous hyperkalemia (high potassium levels) and impair kidney function, especially in elderly patients.",
+    "safety_recommendation": "Use only under strict medical supervision. Monitor potassium levels and kidney function labs regularly.",
     "organ_effects": "Kidneys, heart rhythm"
   },
   {
     "id": "rule-aspirin-ibuprofen",
     "medicines": ["aspirin", "ibuprofen"],
     "severity_level": "moderate",
-    "explanation": "This pairing can increase stomach irritation and may reduce aspirin’s protective effect.",
-    "safety_recommendation": "Take only if instructed and ask a clinician about timing and stomach protection.",
-    "organ_effects": "Stomach lining"
+    "explanation": "Both are NSAIDs. This pairing increases stomach irritation and GI bleeding risk. Ibuprofen can also block aspirin's antiplatelet (heart-protective) effect by competing for the same receptor site on platelets.",
+    "safety_recommendation": "Take aspirin at least 2 hours before ibuprofen to preserve its protective effect. Ask a clinician about stomach protection (e.g. a proton pump inhibitor).",
+    "organ_effects": "Stomach lining, platelet function"
   },
   {
     "id": "rule-paracetamol-alcohol",
     "medicines": ["paracetamol", "alcohol"],
     "severity_level": "moderate",
-    "explanation": "Frequent alcohol intake with paracetamol can stress the liver.",
-    "safety_recommendation": "Avoid alcohol and keep within recommended dose limits.",
+    "explanation": "Frequent alcohol intake with paracetamol significantly stresses the liver. Alcohol induces liver enzymes that convert paracetamol into a toxic metabolite (NAPQI), raising the risk of liver damage even at normal doses.",
+    "safety_recommendation": "Avoid alcohol while taking paracetamol. Keep within recommended dose limits (max 4g/day for adults).",
     "organ_effects": "Liver"
   },
   {
     "id": "rule-sertraline-ibuprofen",
     "medicines": ["sertraline", "ibuprofen"],
     "severity_level": "moderate",
-    "explanation": "This combination may increase the risk of stomach bleeding.",
-    "safety_recommendation": "Use carefully and speak with a clinician if you need frequent pain relief.",
-    "organ_effects": "Stomach lining"
+    "explanation": "Sertraline (an SSRI) reduces platelet serotonin levels, decreasing their ability to clot. Ibuprofen further inhibits platelet function and irritates the GI tract, making upper GI bleeding 3–15x more likely in combination.",
+    "safety_recommendation": "Use carefully and consider a stomach-protective medication. Speak with a clinician if you need frequent pain relief while on an SSRI.",
+    "organ_effects": "Stomach lining, platelet function"
   },
   {
     "id": "rule-metformin-alcohol",
     "medicines": ["metformin", "alcohol"],
     "severity_level": "mild",
-    "explanation": "Alcohol may worsen stomach upset and low blood sugar risk for some people on metformin.",
-    "safety_recommendation": "Limit alcohol and monitor how you feel after taking the medicine.",
-    "organ_effects": "Metabolic balance"
+    "explanation": "Alcohol may worsen stomach upset common with metformin and can increase the risk of lactic acidosis — a rare but serious side effect — especially with heavy alcohol use or liver impairment.",
+    "safety_recommendation": "Limit alcohol to moderate amounts. Monitor for symptoms like nausea, stomach pain, or unusual fatigue.",
+    "organ_effects": "Metabolic balance, liver"
+  },
+  {
+    "id": "rule-ibuprofen-amoxicillin",
+    "medicines": ["ibuprofen", "amoxicillin"],
+    "severity_level": "mild",
+    "explanation": "There is no direct pharmacokinetic interaction, but NSAIDs like ibuprofen can reduce kidney blood flow, which may slightly impair the renal excretion of amoxicillin in people with borderline kidney function.",
+    "safety_recommendation": "Generally safe in healthy individuals. Stay well-hydrated. Monitor kidney function if both are taken for extended periods.",
+    "organ_effects": "Kidneys"
+  },
+  {
+    "id": "rule-warfarin-aspirin",
+    "medicines": ["warfarin", "aspirin"],
+    "severity_level": "severe",
+    "explanation": "Both warfarin and aspirin thin the blood via different mechanisms. Combined use dramatically raises the risk of major bleeding events including brain hemorrhage and gastrointestinal bleeding.",
+    "safety_recommendation": "This combination is only justified in specific high-risk cardiac cases under close clinical management. Seek immediate care if any unusual bleeding occurs.",
+    "organ_effects": "Blood clotting, brain, GI tract"
+  },
+  {
+    "id": "rule-metformin-ibuprofen",
+    "medicines": ["metformin", "ibuprofen"],
+    "severity_level": "mild",
+    "explanation": "Ibuprofen can reduce kidney function, which slows metformin excretion. In patients with existing kidney issues, this may increase the risk of metformin accumulation and lactic acidosis.",
+    "safety_recommendation": "Use paracetamol instead of ibuprofen when possible. Avoid prolonged ibuprofen use alongside metformin.",
+    "organ_effects": "Kidneys, metabolic balance"
   }
 ]

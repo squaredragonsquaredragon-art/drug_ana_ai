@@ -112,6 +112,21 @@ const ProtectedApp = ({ token, user, onLogout, onSessionChange }) => {
     }
   };
 
+  const refreshAlerts = async () => {
+    try {
+      const response = await apiRequest({ method: "post", url: "/alerts/refresh", token });
+      setDashboard((prev) => ({ ...prev, alerts: response.items || [], summary: { ...prev.summary, alert_count: (response.items || []).length } }));
+      const count = response.count || 0;
+      if (count > 0) {
+        toast.success(`Found ${count} interaction alert${count === 1 ? "" : "s"}.`);
+      } else {
+        toast.info("No new interaction alerts found.");
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Could not refresh alerts.");
+    }
+  };
+
   const markTaken = async (medicineId) => {
     try {
       await apiRequest({ method: "post", url: `/medicines/${medicineId}/mark-taken`, token });
@@ -209,7 +224,7 @@ const ProtectedApp = ({ token, user, onLogout, onSessionChange }) => {
     if (location.pathname === "/app/admin") {
       return <AdminPage user={user} adminData={adminData} onAddRule={addRule} />;
     }
-    return <DashboardPage dashboard={dashboard} medicineForm={medicineForm} setMedicineForm={setMedicineForm} onAddMedicine={addMedicine} onMarkTaken={markTaken} onDeleteMedicine={deleteMedicine} />;
+    return <DashboardPage dashboard={dashboard} medicineForm={medicineForm} setMedicineForm={setMedicineForm} onAddMedicine={addMedicine} onMarkTaken={markTaken} onDeleteMedicine={deleteMedicine} onRefreshAlerts={refreshAlerts} />;
   }, [location.pathname, token, records, reports, user, profileForm, dashboard, medicineForm, adminData]);
 
   return (

@@ -21,7 +21,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, extractErrorMessage } from "@/lib/api";
+
 import { blankSignup } from "@/constants";
 
 export const AuthPage = ({ onAuthSuccess }) => {
@@ -34,7 +35,28 @@ export const AuthPage = ({ onAuthSuccess }) => {
   const [resetCode, setResetCode] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const validateLogin = () => {
+    if (!loginForm.email.trim()) { toast.error("Email is required."); return false; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginForm.email)) { toast.error("Enter a valid email address."); return false; }
+    if (!loginForm.password) { toast.error("Password is required."); return false; }
+    return true;
+  };
+
+  const validateSignup = () => {
+    if (!signupForm.name.trim()) { toast.error("Full name is required."); return false; }
+    if (!signupForm.age || Number(signupForm.age) < 1 || Number(signupForm.age) > 120) { toast.error("Enter a valid age (1–120)."); return false; }
+    if (!signupForm.blood_group.trim()) { toast.error("Blood group is required."); return false; }
+    if (!signupForm.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupForm.email)) { toast.error("Enter a valid email address."); return false; }
+    if (!signupForm.phone.trim() || !/^\+?[\d\s\-]{7,15}$/.test(signupForm.phone)) { toast.error("Enter a valid phone number."); return false; }
+    if (signupForm.password.length < 8) { toast.error("Password must be at least 8 characters."); return false; }
+    if (!/[A-Z]/.test(signupForm.password)) { toast.error("Password must contain at least one uppercase letter."); return false; }
+    if (!/[0-9]/.test(signupForm.password)) { toast.error("Password must contain at least one number."); return false; }
+    return true;
+  };
+
   const runAuth = async (type) => {
+    if (type === "login" && !validateLogin()) return;
+    if (type === "signup" && !validateSignup()) return;
     setLoading(true);
     try {
       const endpoint = type === "signup" ? "/auth/signup" : "/auth/login";
@@ -44,31 +66,36 @@ export const AuthPage = ({ onAuthSuccess }) => {
       toast.success(type === "signup" ? "Account created" : "Welcome back");
       navigate("/app/dashboard");
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Unable to continue");
+      toast.error(extractErrorMessage(error, "Unable to continue"));
     } finally {
       setLoading(false);
     }
   };
 
+
   const requestReset = async () => {
+    if (!resetForm.phone.trim()) { toast.error("Phone number is required."); return; }
     try {
       const response = await apiRequest({ method: "post", url: "/auth/request-reset", data: { phone: resetForm.phone } });
       setResetCode(response.demo_code);
       toast.success("Verification code generated for phone recovery");
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Reset request failed");
+      toast.error(extractErrorMessage(error, "Reset request failed"));
     }
   };
 
   const confirmReset = async () => {
+    if (!resetForm.code.trim()) { toast.error("Verification code is required."); return; }
+    if (!resetForm.new_password || resetForm.new_password.length < 8) { toast.error("New password must be at least 8 characters."); return; }
     try {
       await apiRequest({ method: "post", url: "/auth/confirm-reset", data: resetForm });
       toast.success("Password updated. Please login.");
       setTab("login");
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Password reset failed");
+      toast.error(extractErrorMessage(error, "Password reset failed"));
     }
   };
+
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,_rgba(186,230,253,0.75),_transparent_30%),linear-gradient(180deg,_#f6fdff_0%,_#eff8ff_42%,_#ffffff_100%)] px-4 py-6 sm:px-6 lg:px-8">

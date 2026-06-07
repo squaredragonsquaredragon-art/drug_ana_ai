@@ -1,4 +1,5 @@
-import { Pill, AlertTriangle, ClipboardPlus, Bell, Plus, Check, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Pill, AlertTriangle, ClipboardPlus, Bell, Plus, Check, Trash2, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +22,20 @@ export const DashboardPage = ({
   onAddMedicine,
   onMarkTaken,
   onDeleteMedicine,
-}) => (
+  onRefreshAlerts,
+}) => {
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefreshAlerts = async () => {
+    setRefreshing(true);
+    try {
+      await onRefreshAlerts();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  return (
   <div className="space-y-6">
     <section className="glass-panel overflow-hidden p-6 lg:p-8">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -75,25 +89,52 @@ export const DashboardPage = ({
 
       <Card className="border-sky-100 bg-white/90 shadow-sm">
         <CardHeader>
-          <CardTitle>Interaction alerts</CardTitle>
-          <CardDescription>Hybrid safety engine showing severe, moderate, and mild medication conflicts.</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                Interaction alerts
+                {dashboard.alerts?.length ? (
+                  <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">
+                    {dashboard.alerts.length}
+                  </span>
+                ) : null}
+              </CardTitle>
+              <CardDescription>Hybrid safety engine showing severe, moderate, and mild medication conflicts.</CardDescription>
+            </div>
+            <Button
+              data-testid="refresh-alerts-button"
+              variant="outline"
+              size="sm"
+              className="border-sky-200 text-sky-700 hover:bg-sky-50 shrink-0"
+              onClick={handleRefreshAlerts}
+              disabled={refreshing}
+            >
+              <RefreshCw className={`mr-2 h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+              {refreshing ? "Analysing…" : "Refresh"}
+            </Button>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {dashboard.alerts?.length ? (
-            dashboard.alerts.map((alert) => (
-              <div key={alert.id} data-testid={`dashboard-alert-${alert.id}`} className={`rounded-3xl border p-4 ${severityStyles[alert.severity_level] || severityStyles.mild}`}>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-sm font-semibold uppercase tracking-[0.2em]">{alert.severity_level}</p>
-                  <Badge variant="outline" className="border-current bg-transparent text-current">{alert.source}</Badge>
+        <CardContent className="p-4 pt-0">
+          <div
+            className="scrollbar-thin space-y-3 overflow-y-auto pr-2"
+            style={{ maxHeight: "26rem" }}
+          >
+            {dashboard.alerts?.length ? (
+              dashboard.alerts.map((alert) => (
+                <div key={alert.id} data-testid={`dashboard-alert-${alert.id}`} className={`rounded-3xl border p-4 ${severityStyles[alert.severity_level] || severityStyles.mild}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm font-semibold uppercase tracking-[0.2em]">{alert.severity_level}</p>
+                    <Badge variant="outline" className="border-current bg-transparent text-current">{alert.source}</Badge>
+                  </div>
+                  <p className="mt-3 text-lg font-semibold">{alert.medicine_combination.join(" + ")}</p>
+                  <p className="mt-2 text-sm leading-7">{alert.explanation}</p>
+                  <p className="mt-3 text-sm font-medium">Recommendation: {alert.safety_recommendation}</p>
                 </div>
-                <p className="mt-3 text-lg font-semibold">{alert.medicine_combination.join(" + ")}</p>
-                <p className="mt-2 text-sm leading-7">{alert.explanation}</p>
-                <p className="mt-3 text-sm font-medium">Recommendation: {alert.safety_recommendation}</p>
-              </div>
-            ))
-          ) : (
-            <EmptyState testId="dashboard-alerts-empty" icon={Check} title="No active interaction alerts" description="Your current medicine list does not show stored conflicts right now." />
-          )}
+              ))
+            ) : (
+              <EmptyState testId="dashboard-alerts-empty" icon={Check} title="No active interaction alerts" description="Your current medicine list does not show stored conflicts right now." />
+            )}
+          </div>
         </CardContent>
       </Card>
     </section>
@@ -101,10 +142,21 @@ export const DashboardPage = ({
     <section className="grid gap-6 lg:grid-cols-2">
       <Card className="border-sky-100 bg-white/90 shadow-sm">
         <CardHeader>
-          <CardTitle>Current medicines & reminders</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            Current medicines &amp; reminders
+            {dashboard.medicines?.length ? (
+              <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-700">
+                {dashboard.medicines.length}
+              </span>
+            ) : null}
+          </CardTitle>
           <CardDescription>Mark doses as taken and keep timing under control.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="p-4 pt-0">
+          <div
+            className="scrollbar-thin space-y-3 overflow-y-auto pr-2"
+            style={{ maxHeight: "30rem" }}
+          >
           {dashboard.medicines?.length ? (
             dashboard.medicines.map((medicine) => {
               const takenToday = medicine.taken_log?.includes(new Date().toISOString().slice(0, 10));
@@ -133,6 +185,7 @@ export const DashboardPage = ({
           ) : (
             <EmptyState testId="dashboard-medicines-empty" icon={Pill} title="No medicines added yet" description="Use quick add or scanning tools to populate your treatment list." />
           )}
+          </div>
         </CardContent>
       </Card>
 
@@ -141,23 +194,29 @@ export const DashboardPage = ({
           <CardTitle>Recent prescriptions and records</CardTitle>
           <CardDescription>Newly uploaded items appear here for fast review before doctor visits.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {dashboard.records?.length ? (
-            dashboard.records.map((record) => (
-              <div key={record.id} data-testid={`dashboard-record-${record.id}`} className="rounded-3xl border border-sky-100 bg-slate-50/90 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-lg font-semibold text-slate-900">{record.title}</p>
-                  <Badge className="bg-sky-100 text-sky-700 hover:bg-sky-100">{record.report_type}</Badge>
+        <CardContent className="p-4 pt-0">
+          <div
+            className="scrollbar-thin space-y-3 overflow-y-auto pr-2"
+            style={{ maxHeight: "30rem" }}
+          >
+            {dashboard.records?.length ? (
+              dashboard.records.map((record) => (
+                <div key={record.id} data-testid={`dashboard-record-${record.id}`} className="rounded-3xl border border-sky-100 bg-slate-50/90 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-lg font-semibold text-slate-900">{record.title}</p>
+                    <Badge className="bg-sky-100 text-sky-700 hover:bg-sky-100">{record.report_type}</Badge>
+                  </div>
+                  <p className="mt-3 text-sm leading-7 text-slate-500">{record.past_treatments}</p>
+                  {record.prescription_text ? <p className="mt-3 rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">OCR: {record.prescription_text}</p> : null}
                 </div>
-                <p className="mt-3 text-sm leading-7 text-slate-500">{record.past_treatments}</p>
-                {record.prescription_text ? <p className="mt-3 rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">OCR: {record.prescription_text}</p> : null}
-              </div>
-            ))
-          ) : (
-            <EmptyState testId="dashboard-records-empty" icon={ClipboardPlus} title="No records stored yet" description="Prescription scans, history notes, and uploaded treatments will appear here." />
-          )}
+              ))
+            ) : (
+              <EmptyState testId="dashboard-records-empty" icon={ClipboardPlus} title="No records stored yet" description="Prescription scans, history notes, and uploaded treatments will appear here." />
+            )}
+          </div>
         </CardContent>
       </Card>
     </section>
   </div>
-);
+  );
+};

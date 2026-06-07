@@ -12,6 +12,7 @@ Features:
   - Health check endpoints for AWS ALB / ECS
 """
 
+import base64
 import json
 import os
 import tempfile
@@ -32,7 +33,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.cors import CORSMiddleware
 
-from ai_service import analyze_interactions_dynamic, extract_medicines_from_text, generate_chat_reply, transcribe_voice_note
+from ai_service import analyze_interactions_dynamic, extract_medicines_from_text, extract_medicines_from_image, generate_chat_reply, transcribe_voice_note
 from auth_utils import create_access_token, decode_access_token, hash_password, verify_password
 from schemas import (
     AuthResponse,
@@ -122,17 +123,26 @@ async def ensure_indexes():
 # ─── Seed Defaults ─────────────────────────────────
 
 async def seed_defaults():
-    """Seed drug interaction rules and admin user on first boot."""
-    rules_count = await db.interaction_rules.count_documents({})
-    if rules_count == 0:
-        rules_path = ROOT_DIR / "drug_interactions.json"
-        if rules_path.exists():
-            rules = json.loads(rules_path.read_text())
-        else:
+    """Seed drug interaction rules (upsert by id) and admin user on first boot."""
+    rules_path = ROOT_DIR / "drug_interactions.json"
+    if rules_path.exists():
+        rules = json.loads(rules_path.read_text())
+    else:
+        try:
             packaged_rules_path = package_resources.files("meditrack_backend").joinpath("drug_interactions.json")
             rules = json.loads(packaged_rules_path.read_text())
-        await db.interaction_rules.insert_many(rules)
-        logger.info(f"✅ Seeded {len(rules)} drug interaction rules")
+        except Exception:
+            rules = []
+
+    # Upsert each rule by its id — runs every startup so new rules are always picked up
+    if rules:
+        for rule in rules:
+            await db.interaction_rules.update_one(
+                {"id": rule["id"]},
+                {"$set": rule},
+                upsert=True,
+            )
+        logger.info(f"✅ Upserted {len(rules)} drug interaction rules")
 
     admin_email = "admin@meditrack.app"
     admin_exists = await db.users.find_one({"email": admin_email}, {"_id": 0})
@@ -311,16 +321,17 @@ async def create_interaction_alerts(user_id: str) -> List[dict]:
     names = [medicine["medicine_name"].strip().lower() for medicine in medicines]
     rules = await db.interaction_rules.find({}, {"_id": 0}).to_list(500)
     alerts = []
-    seen = set()
+    seen_db = set()   # dedup within DB alerts only
+    seen_ai = set()   # dedup within AI alerts only — AI runs independently from DB
 
-    # Check against static rules DB
+    # ── Static rules database check ─────────────────
     for rule in rules:
         rule_names = [item.lower() for item in rule["medicines"]]
         if all(item in names for item in rule_names):
             key = tuple(sorted(rule_names))
-            if key in seen:
+            if key in seen_db:
                 continue
-            seen.add(key)
+            seen_db.add(key)
             alert = InteractionAlert(
                 user_id=user_id,
                 medicine_combination=rule["medicines"],
@@ -331,12 +342,18 @@ async def create_interaction_alerts(user_id: str) -> List[dict]:
             )
             alerts.append(alert.model_dump())
 
+    # ── AI analysis — always runs independently for ALL combinations ──────
+    # AI is NOT filtered by seen_db so it always adds its AI prediction
+    # even when the DB already matched the same rule. This ensures:
+    #  - 2-medicine combos get both a DB alert + an AI-powered alert
+    #  - Brand names / typos (e.g. "asparin") are resolved by AI
+    #  - AI provides richer clinical reasoning than static DB rules
     # Check against AI analysis
     for ai_alert in await analyze_interactions_dynamic(user_id, [m["medicine_name"] for m in medicines]):
         key = tuple(sorted([name.lower() for name in ai_alert.get("medicine_combination", [])]))
-        if len(key) < 2 or key in seen:
+        if len(key) < 2 or key in seen_ai:
             continue
-        seen.add(key)
+        seen_ai.add(key)
         alert = InteractionAlert(
             user_id=user_id,
             medicine_combination=ai_alert.get("medicine_combination", []),
@@ -534,25 +551,59 @@ async def import_medicines(payload: dict, user=Depends(get_user_from_token)):
             saved_items.append(document_without_mongo_id(doc))
 
     if not saved_items:
-        fallback_name = raw_text.split("\n")[0][:50] or "Scanned medicine"
-        medicine = MedicineRecord(
-            user_id=user["id"],
-            medicine_name=fallback_name,
-            dosage="Refer prescription",
-            start_date=datetime.now(timezone.utc).date().isoformat(),
-            frequency="As prescribed",
-            reminder_times=[],
-            notes=f"Imported from {source}",
-            source=source,
-            barcode="",
-        )
-        doc = medicine.model_dump()
-        doc["created_at"] = doc["created_at"].isoformat()
-        await db.medicines.insert_one(doc)
-        saved_items.append(document_without_mongo_id(doc))
+        raise HTTPException(status_code=400, detail="Enter valid medicine details")
 
     alerts = await create_interaction_alerts(user["id"])
     return {"items": saved_items, "alerts": alerts}
+
+
+@api_router.post("/medicines/import-from-image", tags=["Medicines"])
+async def import_medicines_from_image(
+    file: UploadFile = File(...),
+    source: str = "upload",
+    user=Depends(get_user_from_token)
+):
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail="Empty file uploaded")
+
+    base64_image = base64.b64encode(contents).decode("utf-8")
+    mime_type = file.content_type or "image/jpeg"
+
+    result = await extract_medicines_from_image(user["id"], base64_image, mime_type)
+    extracted_meds = result.get("medicines", [])
+    transcription = result.get("transcription", "")
+
+    saved_items = []
+    if extracted_meds:
+        for item in extracted_meds[:5]:
+            if not item.get("medicine_name"):
+                continue
+            medicine = MedicineRecord(
+                user_id=user["id"],
+                medicine_name=item.get("medicine_name", "Unknown medicine"),
+                dosage=item.get("dosage", "Refer prescription"),
+                start_date=datetime.now(timezone.utc).date().isoformat(),
+                frequency=item.get("frequency", "As prescribed"),
+                reminder_times=[],
+                notes=item.get("notes", f"Imported from {source} image"),
+                source=source,
+                barcode="",
+            )
+            doc = medicine.model_dump()
+            doc["created_at"] = doc["created_at"].isoformat()
+            await db.medicines.insert_one(doc)
+            saved_items.append(document_without_mongo_id(doc))
+
+    if not saved_items:
+        raise HTTPException(status_code=400, detail="Enter valid medicine details")
+
+    alerts = await create_interaction_alerts(user["id"])
+    return {
+        "items": saved_items,
+        "alerts": alerts,
+        "transcription": transcription
+    }
 
 
 @api_router.get("/medicines/barcode/{barcode}", tags=["Medicines"])
@@ -618,6 +669,20 @@ async def get_alerts(user=Depends(get_user_from_token)):
     return {"items": alerts}
 
 
+@api_router.post("/alerts/refresh", tags=["Alerts"])
+async def refresh_alerts(user=Depends(get_user_from_token)):
+    """Force re-run the full interaction analysis (DB rules + AI) for the current user."""
+    alerts = await create_interaction_alerts(user["id"])
+    serialized = []
+    for alert in alerts:
+        doc = {**alert}
+        if hasattr(doc.get("timestamp"), "isoformat"):
+            doc["timestamp"] = doc["timestamp"].isoformat()
+        serialized.append(doc)
+    logger.info(f"Alert refresh triggered for user {user['id']}: {len(alerts)} alerts found")
+    return {"items": serialized, "count": len(alerts)}
+
+
 # ── Profile ────────────────────────────────────────
 
 @api_router.get("/profile", tags=["Profile"])
@@ -664,8 +729,42 @@ async def public_report(share_token: str):
 
 # ── Chat ──────────────────────────────────────────
 
+NON_MEDICAL_PATTERNS = [
+    "javascript", "python", "code", "programming", "software", "computer",
+    "movie", "film", "song", "music", "cricket", "football", "game",
+    "weather", "news", "politics", "election", "stock", "crypto", "bitcoin",
+    "recipe", "cook", "restaurant", "travel", "hotel", "flight",
+    "joke", "funny", "meme", "story", "poem", "essay", "homework",
+]
+MEDICAL_PATTERNS = [
+    "medicine", "drug", "tablet", "capsule", "dose", "dosage", "symptom", "disease",
+    "pain", "fever", "headache", "infection", "antibiotic", "prescription",
+    "doctor", "hospital", "health", "medical", "treatment", "side effect",
+    "allergy", "blood", "heart", "diabetes", "pressure", "vitamin",
+    "supplement", "pharmacy", "pharmacist", "injection", "vaccination", "vaccine",
+    "cancer", "surgery", "diagnosis", "chronic", "acute", "wound", "fracture",
+    "nausea", "vomiting", "diarrhea", "constipation", "asthma", "inhaler",
+    "anxiety", "depression", "mental health", "sleep", "insomnia", "fatigue",
+]
+MEDICAL_ONLY_REFUSAL = (
+    "I can only answer medical and health-related questions. "
+    "Please ask about medicines, dosage, side effects, or health conditions."
+)
+
+
+def _is_likely_non_medical(text: str) -> bool:
+    lower = text.lower()
+    has_non_medical = any(kw in lower for kw in NON_MEDICAL_PATTERNS)
+    has_medical = any(kw in lower for kw in MEDICAL_PATTERNS)
+    return has_non_medical and not has_medical
+
+
 @api_router.post("/chat", tags=["Chat"])
 async def chat(input: ChatRequest, user=Depends(get_user_from_token)):
+    # Server-side medical topic guard
+    if _is_likely_non_medical(input.message):
+        return {"reply": MEDICAL_ONLY_REFUSAL, "messages": []}
+
     user_message = ChatMessage(user_id=user["id"], role="user", message=input.message)
     user_doc = user_message.model_dump()
     user_doc["created_at"] = user_doc["created_at"].isoformat()

@@ -25,6 +25,29 @@ export const setAuthToken = (token) => {
   }
 };
 
+/**
+ * Safely extracts a human-readable error message from any API error.
+ * Handles Pydantic v2 validation errors (detail is an array of objects)
+ * as well as plain string details and generic errors.
+ */
+export const extractErrorMessage = (error, fallback = "Something went wrong. Please try again.") => {
+  const detail = error?.response?.data?.detail;
+  if (!detail) return fallback;
+  // Pydantic v2 returns an array of validation error objects
+  if (Array.isArray(detail)) {
+    return detail
+      .map((err) => {
+        const field = Array.isArray(err.loc) ? err.loc.filter((l) => l !== "body").join(" → ") : "";
+        const msg = err.msg || "Invalid value";
+        return field ? `${field}: ${msg}` : msg;
+      })
+      .join(" | ");
+  }
+  // Plain string or other types
+  if (typeof detail === "string") return detail;
+  return fallback;
+};
+
 export const apiRequest = async ({ method = "get", url, data, token, params }) => {
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
   const response = await apiClient.request({ method, url, data, params, headers });

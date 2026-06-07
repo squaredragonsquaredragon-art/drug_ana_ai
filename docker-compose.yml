@@ -27,11 +27,13 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      # These override any values from env_file
       - MONGO_URL=mongodb://mongodb:27017
       - DB_NAME=meditrack
       - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001
       - LOG_LEVEL=INFO
       - ENVIRONMENT=production
+      - OPENAI_MODEL=gpt-4o-mini
     depends_on:
       mongodb:
         condition: service_healthy

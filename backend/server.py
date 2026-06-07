@@ -318,36 +318,10 @@ async def get_admin_user(user=Depends(get_user_from_token)):
 
 async def create_interaction_alerts(user_id: str) -> List[dict]:
     medicines = await db.medicines.find({"user_id": user_id}, {"_id": 0}).to_list(200)
-    names = [medicine["medicine_name"].strip().lower() for medicine in medicines]
-    rules = await db.interaction_rules.find({}, {"_id": 0}).to_list(500)
     alerts = []
-    seen_db = set()   # dedup within DB alerts only
-    seen_ai = set()   # dedup within AI alerts only — AI runs independently from DB
-
-    # ── Static rules database check ─────────────────
-    for rule in rules:
-        rule_names = [item.lower() for item in rule["medicines"]]
-        if all(item in names for item in rule_names):
-            key = tuple(sorted(rule_names))
-            if key in seen_db:
-                continue
-            seen_db.add(key)
-            alert = InteractionAlert(
-                user_id=user_id,
-                medicine_combination=rule["medicines"],
-                severity_level=rule["severity_level"],
-                explanation=rule["explanation"],
-                safety_recommendation=rule["safety_recommendation"],
-                source="database",
-            )
-            alerts.append(alert.model_dump())
+    seen_ai = set()
 
     # ── AI analysis — always runs independently for ALL combinations ──────
-    # AI is NOT filtered by seen_db so it always adds its AI prediction
-    # even when the DB already matched the same rule. This ensures:
-    #  - 2-medicine combos get both a DB alert + an AI-powered alert
-    #  - Brand names / typos (e.g. "asparin") are resolved by AI
-    #  - AI provides richer clinical reasoning than static DB rules
     # Check against AI analysis
     for ai_alert in await analyze_interactions_dynamic(user_id, [m["medicine_name"] for m in medicines]):
         key = tuple(sorted([name.lower() for name in ai_alert.get("medicine_combination", [])]))
@@ -363,6 +337,7 @@ async def create_interaction_alerts(user_id: str) -> List[dict]:
             source="ai",
         )
         alerts.append(alert.model_dump())
+
 
     await db.interaction_alerts.delete_many({"user_id": user_id})
     if alerts:
